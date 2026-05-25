@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSE Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 p-4">
+  <div class="mx-auto max-w-2xl">
+    <div class="mb-4 flex gap-2">
+      <input type="text" id="user_message" placeholder="Type a message…"
+        class="flex-1 rounded border border-gray-300 px-3 py-2" />
+      <button id="connect"
+        class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50">
+        Send
+      </button>
+    </div>
+    <div id="output"
+      class="min-h-[200px] rounded border border-gray-200 bg-white p-4 whitespace-pre-wrap break-words">
+    </div>
+  </div>
+
+  <script>
+    const output = document.getElementById("output");
+    const connectBtn = document.getElementById("connect");
+    const userMessage = document.getElementById("user_message");
+
+    connectBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      output.textContent = "";
+      connectBtn.disabled = true;
+
+      const userMessageValue = userMessage.value;
+      const es = new EventSource(`/items/stream?user_message=${encodeURIComponent(userMessageValue)}`);
+      let prev_d_name = "";
+
+      es.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        const d_name = data.name;
+        const color = d_name === "user" ? "text-blue-600" : "text-gray-900";
+
+        if (d_name !== prev_d_name) {
+          output.innerHTML += `<span class="${color} font-semibold">${d_name}: </span>`;
+          prev_d_name = d_name;
+        }
+        output.innerHTML += `<span class="${color}">${data.description}</span>`;
+      };
+
+      es.onerror = () => {
+        es.close();
+        connectBtn.disabled = false;
+      };
+    });
+  </script>
+</body>
+
+</html>
