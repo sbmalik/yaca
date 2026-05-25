@@ -28,31 +28,87 @@
     const connectBtn = document.getElementById("connect");
     const userMessage = document.getElementById("user_message");
 
-    connectBtn.addEventListener("click", (e) => {
+    function parseSseData(raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return raw;
+      }
+    }
+
+    function handleAiEvent(data) {
+      if (data === "__START__") {
+        output.innerHTML = "";
+      } else if (data === "__END__") {
+        output.innerHTML += "\n";
+      } else if (data) {
+        output.innerHTML += data;
+      }
+    }
+
+    function parseSseChunk(chunk, onEvent) {
+      const events = chunk.split("\n\n");
+      for (const eventBlock of events) {
+        if (!eventBlock.trim() || eventBlock.startsWith(":")) continue;
+
+        let eventType = "message";
+        let data = "";
+
+        for (const line of eventBlock.split("\n")) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7);
+          } else if (line.startsWith("data: ")) {
+            data += line.slice(6);
+          }
+        }
+
+        if (eventType === "AI" && data !== "") {
+          onEvent(parseSseData(data));
+        }
+      }
+    }
+
+    connectBtn.addEventListener("click", async (e) => {
       e.preventDefault();
       output.textContent = "";
       connectBtn.disabled = true;
 
-      const userMessageValue = userMessage.value;
-      const es = new EventSource(`/items/stream?user_message=${encodeURIComponent(userMessageValue)}`);
-      let prev_d_name = "";
+      try {
+        const response = await fetch("/chat/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: userMessage.value }),
+        });
 
-      es.onmessage = (e) => {
-        const data = JSON.parse(e.data);
-        const d_name = data.name;
-        const color = d_name === "user" ? "text-blue-600" : "text-gray-900";
-
-        if (d_name !== prev_d_name) {
-          output.innerHTML += `<span class="${color} font-semibold">${d_name}: </span>`;
-          prev_d_name = d_name;
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}`);
         }
-        output.innerHTML += `<span class="${color}">${data.description}</span>`;
-      };
 
-      es.onerror = () => {
-        es.close();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() ?? "";
+
+          for (const part of parts) {
+            parseSseChunk(part + "\n\n", handleAiEvent);
+          }
+        }
+
+        if (buffer.trim()) {
+          parseSseChunk(buffer, handleAiEvent);
+        }
+      } catch (err) {
+        output.textContent = `Error: ${err.message}`;
+      } finally {
         connectBtn.disabled = false;
-      };
+      }
     });
   </script>
 </body>
