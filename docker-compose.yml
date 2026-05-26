@@ -1,0 +1,15 @@
+version: '3.9'
+
+services:
+  yaca_postgres:
+    container_name: yaca_postgres
+    image: postgres:18
+    ports:
+      - "5432:5432"
+    volumes:
+      - yaca_postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+
+volumes:
+  yaca_postgres_data:
