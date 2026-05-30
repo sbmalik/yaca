@@ -31,6 +31,7 @@ app.add_middleware(
 
 class UserMessage(BaseModel):
     message: str
+    conversation_id: UUID
 
 
 class ConversationOut(BaseModel):
@@ -90,18 +91,57 @@ async def list_conversation_messages(
 
 
 @app.post("/chat/stream", response_class=EventSourceResponse)
-async def sse_items(user_message: UserMessage) -> AsyncIterable[ServerSentEvent]:
-    logger.info(f"User message: {user_message.message}")
-    yield ServerSentEvent(event="AI", data="__START__")
-    async for chunk in chat_response(
-        messages=[
+async def sse_items(
+    user_message: UserMessage,
+    session: AsyncSession = Depends(get_session),
+) -> AsyncIterable[ServerSentEvent]:
+    conversation = await session.get(Conversation, user_message.conversation_id)
+    if conversation is None:
+        conversation = Conversation(
+            id=user_message.conversation_id,
+            user_id=1,
+            title=f"{user_message.message[:50]}...",
+        )
+        session.add(conversation)
+        await session.commit()
+        past_messages = []
+    else:
+        past_messages = [
             {
-                "role": "user",
-                "content": user_message.message,
+                "role": message.role,
+                "content": message.content,
             }
+            for message in await list_conversation_messages(
+                user_message.conversation_id, session
+            )
         ]
+    new_message_dict = {
+        "role": "user",
+        "content": user_message.message,
+    }
+    user_chat_message = ChatMessage(
+        conversation_id=user_message.conversation_id,
+        role="user",
+        content=user_message.message,
+    )
+    session.add(user_chat_message)
+    await session.commit()
+    messages = past_messages + [new_message_dict]
+    logger.info(f"{messages=}")
+    yield ServerSentEvent(event="AI", data="__START__")
+    ai_message = ""
+    async for chunk in chat_response(
+        messages=messages,
     ):
         if config.mock_response:
             await asyncio.sleep(0.2)
+        ai_message += chunk
         yield ServerSentEvent(event="AI", data=chunk)
+    ai_chat_message = ChatMessage(
+        conversation_id=user_message.conversation_id,
+        role="assistant",
+        content=ai_message,
+    )
+    session.add(ai_chat_message)
+    await session.commit()
     yield ServerSentEvent(event="AI", data="__END__")

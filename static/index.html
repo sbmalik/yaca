@@ -50,6 +50,15 @@
     const USER_ID = 1;
     let activeConversationId = null;
 
+    function resolveConversationId() {
+      if (activeConversationId) {
+        return { conversationId: activeConversationId, isNewChat: false };
+      }
+      const conversationId = crypto.randomUUID();
+      activeConversationId = conversationId;
+      return { conversationId, isNewChat: true };
+    }
+
     function roleClasses(role) {
       return role === "user"
         ? { label: "text-blue-600", text: "text-blue-600" }
@@ -169,17 +178,24 @@
 
     connectBtn.addEventListener("click", async (e) => {
       e.preventDefault();
-      if (!userMessage.value.trim()) return;
+      const message = userMessage.value.trim();
+      if (!message) return;
 
-      output.textContent = "";
+      const { conversationId, isNewChat } = resolveConversationId();
+      if (isNewChat) {
+        output.innerHTML = "";
+      }
+
       connectBtn.disabled = true;
-      setActiveConversation(null);
 
       try {
         const response = await fetch("/chat/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: userMessage.value }),
+          body: JSON.stringify({
+            message,
+            conversation_id: conversationId,
+          }),
         });
 
         if (!response.ok) {
