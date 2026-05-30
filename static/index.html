@@ -8,25 +8,124 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="bg-gray-100 p-4">
-  <div class="mx-auto max-w-2xl">
-    <div class="mb-4 flex gap-2">
-      <input type="text" id="user_message" placeholder="Type a message…"
-        class="flex-1 rounded border border-gray-300 px-3 py-2" />
-      <button id="connect"
-        class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50">
-        Send
-      </button>
-    </div>
-    <div id="output"
-      class="min-h-[200px] rounded border border-gray-200 bg-white p-4 whitespace-pre-wrap break-words">
-    </div>
+<body class="h-screen bg-gray-100">
+  <div class="flex h-full">
+    <aside class="flex w-64 shrink-0 flex-col border-r border-gray-200 bg-white">
+      <div class="border-b border-gray-200 p-4">
+        <button id="new_chat"
+          class="w-full rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700">
+          New Chat
+        </button>
+      </div>
+      <div id="sidebar" class="flex-1 overflow-y-auto p-2">
+        <p id="sidebar_loading" class="px-2 py-3 text-sm text-gray-400">Loading…</p>
+      </div>
+    </aside>
+
+    <main class="flex min-w-0 flex-1 flex-col p-4">
+      <div class="mx-auto flex h-full w-full max-w-2xl flex-col">
+        <div class="mb-4 flex gap-2">
+          <input type="text" id="user_message" placeholder="Type a message…"
+            class="flex-1 rounded border border-gray-300 px-3 py-2" />
+          <button id="connect"
+            class="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50">
+            Send
+          </button>
+        </div>
+        <div id="output"
+          class="min-h-0 flex-1 overflow-y-auto rounded border border-gray-200 bg-white p-4 whitespace-pre-wrap break-words">
+        </div>
+      </div>
+    </main>
   </div>
 
   <script>
     const output = document.getElementById("output");
     const connectBtn = document.getElementById("connect");
     const userMessage = document.getElementById("user_message");
+    const sidebar = document.getElementById("sidebar");
+    const sidebarLoading = document.getElementById("sidebar_loading");
+    const newChatBtn = document.getElementById("new_chat");
+
+    const USER_ID = 1;
+    let activeConversationId = null;
+
+    function roleClasses(role) {
+      return role === "user"
+        ? { label: "text-blue-600", text: "text-blue-600" }
+        : { label: "text-gray-600", text: "text-gray-900" };
+    }
+
+    function renderMessages(messages) {
+      output.innerHTML = "";
+      for (const msg of messages) {
+        const classes = roleClasses(msg.role);
+        output.innerHTML += `
+          <div class="mb-3">
+            <span class="${classes.label} text-sm font-semibold capitalize">${msg.role}: </span>
+            <span class="${classes.text}">${msg.content}</span>
+          </div>`;
+      }
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function setActiveConversation(id) {
+      activeConversationId = id;
+      for (const btn of sidebar.querySelectorAll("[data-conversation-id]")) {
+        btn.classList.toggle("bg-blue-50", btn.dataset.conversationId === id);
+        btn.classList.toggle("text-blue-700", btn.dataset.conversationId === id);
+      }
+    }
+
+    async function loadConversations() {
+      const response = await fetch(`/conversations?user_id=${USER_ID}`);
+      if (!response.ok) {
+        sidebar.innerHTML = `<p class="px-2 py-3 text-sm text-red-500">Failed to load conversations</p>`;
+        return;
+      }
+
+      const conversations = await response.json();
+      sidebar.innerHTML = "";
+
+      if (conversations.length === 0) {
+        sidebar.innerHTML = `<p class="px-2 py-3 text-sm text-gray-400">No conversations yet</p>`;
+        return;
+      }
+
+      for (const conversation of conversations) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.dataset.conversationId = conversation.id;
+        btn.className =
+          "mb-1 w-full rounded px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100";
+        btn.textContent = conversation.title;
+        btn.addEventListener("click", () => selectConversation(conversation.id));
+        sidebar.appendChild(btn);
+      }
+    }
+
+    async function selectConversation(conversationId) {
+      setActiveConversation(conversationId);
+
+      const response = await fetch(`/conversations/${conversationId}/messages`);
+      if (!response.ok) {
+        output.textContent = "Failed to load messages.";
+        return;
+      }
+
+      const messages = await response.json();
+      renderMessages(messages);
+    }
+
+    function startNewChat() {
+      activeConversationId = null;
+      output.innerHTML = "";
+      userMessage.value = "";
+      for (const btn of sidebar.querySelectorAll("[data-conversation-id]")) {
+        btn.classList.remove("bg-blue-50", "text-blue-700");
+      }
+      userMessage.focus();
+    }
 
     function parseSseData(raw) {
       try {
@@ -70,8 +169,11 @@
 
     connectBtn.addEventListener("click", async (e) => {
       e.preventDefault();
+      if (!userMessage.value.trim()) return;
+
       output.textContent = "";
       connectBtn.disabled = true;
+      setActiveConversation(null);
 
       try {
         const response = await fetch("/chat/stream", {
@@ -110,6 +212,9 @@
         connectBtn.disabled = false;
       }
     });
+
+    newChatBtn.addEventListener("click", startNewChat);
+    loadConversations();
   </script>
 </body>
 
