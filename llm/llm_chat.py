@@ -1,5 +1,6 @@
-from langchain.chat_models import init_chat_model
 from collections.abc import AsyncIterable
+
+from langchain.chat_models import init_chat_model
 
 from config.config import config
 

@@ -1,11 +1,12 @@
 from datetime import datetime
 from uuid import uuid4
 
-from db.base import Base
+from sqlalchemy import UUID, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import DateTime, UUID, Integer, String, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.types import Text
+
+from db.base import Base
 
 
 class Conversation(Base):
