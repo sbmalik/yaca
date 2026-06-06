@@ -65,17 +65,30 @@
         : { label: "text-gray-600", text: "text-gray-900" };
     }
 
+    function appendMessage(role, content) {
+      const classes = roleClasses(role);
+      const wrapper = document.createElement("div");
+      wrapper.className = "mb-3";
+
+      const label = document.createElement("span");
+      label.className = `${classes.label} text-sm font-semibold capitalize`;
+      label.textContent = `${role}: `;
+
+      const text = document.createElement("span");
+      text.className = classes.text;
+      text.textContent = content;
+
+      wrapper.append(label, text);
+      output.appendChild(wrapper);
+      output.scrollTop = output.scrollHeight;
+      return text;
+    }
+
     function renderMessages(messages) {
       output.innerHTML = "";
       for (const msg of messages) {
-        const classes = roleClasses(msg.role);
-        output.innerHTML += `
-          <div class="mb-3">
-            <span class="${classes.label} text-sm font-semibold capitalize">${msg.role}: </span>
-            <span class="${classes.text}">${msg.content}</span>
-          </div>`;
+        appendMessage(msg.role, msg.content);
       }
-      output.scrollTop = output.scrollHeight;
     }
 
     function setActiveConversation(id) {
@@ -144,13 +157,22 @@
       }
     }
 
+    let currentAssistantNode = null;
+
     function handleAiEvent(data) {
       if (data === "__START__") {
-        output.innerHTML = "";
+        currentAssistantNode = appendMessage("assistant", "");
       } else if (data === "__END__") {
-        output.innerHTML += "\n";
+        currentAssistantNode = null;
+      } else if (data === "__ERROR__") {
+        if (!currentAssistantNode) currentAssistantNode = appendMessage("assistant", "");
+        currentAssistantNode.textContent = "⚠️ Something went wrong. Please try again.";
+        currentAssistantNode.classList.add("text-red-500");
+        currentAssistantNode = null;
       } else if (data) {
-        output.innerHTML += data;
+        if (!currentAssistantNode) currentAssistantNode = appendMessage("assistant", "");
+        currentAssistantNode.textContent += data;
+        output.scrollTop = output.scrollHeight;
       }
     }
 
@@ -181,10 +203,9 @@
       const message = userMessage.value.trim();
       if (!message) return;
 
-      const { conversationId, isNewChat } = resolveConversationId();
-      if (isNewChat) {
-        output.innerHTML = "";
-      }
+      const { conversationId } = resolveConversationId();
+      appendMessage("user", message);
+      userMessage.value = "";
 
       connectBtn.disabled = true;
 
@@ -223,7 +244,8 @@
           parseSseChunk(buffer, handleAiEvent);
         }
       } catch (err) {
-        output.textContent = `Error: ${err.message}`;
+        appendMessage("assistant", `⚠️ Error: ${err.message}`).classList.add("text-red-500");
+        currentAssistantNode = null;
       } finally {
         connectBtn.disabled = false;
       }
