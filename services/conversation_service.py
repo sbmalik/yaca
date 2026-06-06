@@ -60,6 +60,7 @@ async def start_turn(
                 title=make_title(message),
             )
         )
+        await session.flush()
     history = (
         []
         if is_new
