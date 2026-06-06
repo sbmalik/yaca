@@ -9,6 +9,8 @@ Yet Another Chat Agent
 4. Configuration: Pydantic Settings for configuration.
 5. Routing: LiteLLM for routing so we don't stuck with a single model provider. 
 6. Orchestration: LangGraph for orchestrating the flow of the conversation.
+7. Persistence: PostgreSQL with SQLAlchemy async, Alembic migrations, and Docker Compose for local dev.
 
 ## TODO List
-[ ] Chat history 
+[x] Chat history
+[ ] Improve Langgraph flows
